@@ -1,10 +1,11 @@
+
 from io import BytesIO
 from pathlib import Path
 import streamlit as st
 import pandas as pd
 import json
-import requests
 import urllib.parse
+import requests
 
 # =====================
 # Streamlit 設定
@@ -34,11 +35,15 @@ df = load_data()
 # =====================
 @st.cache_data
 def load_enrichr_libraries():
+
     url = "https://maayanlab.cloud/Enrichr/datasetStatistics"
     r = requests.get(url)
     r.raise_for_status()
+
     data = r.json()
-    return sorted([lib["libraryName"] for lib in data["statistics"]])
+    libraries = sorted([lib["libraryName"] for lib in data["statistics"]])
+
+    return libraries
 
 library_list = load_enrichr_libraries()
 
@@ -106,85 +111,62 @@ st.download_button(
 )
 
 # =====================
-# ⭐ 多 Library 選擇
+# Library 選單（全部）
 # =====================
-selected_libraries = st.multiselect(
-    "選擇分析庫（可多選）",
-    library_list,
-    default=["KEGG_2021_Human"]
+selected_library = st.selectbox(
+    "選擇分析庫",
+    library_list
 )
-st.markdown("💡 多選方式：點選下拉選單中的項目，列表中會累加，點叉號可取消")
 
 # =====================
-# ⭐ 前50基因預覽
+# ⭐ 建立 Enrichr-KG URL
 # =====================
-genes_preview = (
-    result["Symbol"]
-    .dropna()
-    .astype(str)
-    .str.strip()
-    .str.upper()
-    .unique()
-)[:50]
+def build_enrichr_kg_url(genes, description, library):
 
-if len(genes_preview) > 0:
-    st.subheader("前50筆基因預覽（送到 Enrichr-KG）")
-    st.text_area("Gene List Preview", "\n".join(genes_preview), height=200)
+    gene_text = "\n".join(genes)
 
-# =====================
-# ⭐ 一鍵打開 Enrichr-KG
-# =====================
-if st.button("👉 一鍵打開 Enrichr-KG"):
-
-    if len(genes_preview) == 0:
-        st.warning("篩選後沒有基因")
-        st.stop()
-
-    if len(selected_libraries) == 0:
-        st.warning("請至少選一個 library")
-        st.stop()
-
-    # ---------------------
-    # 1️⃣ 先 POST gene list 到 Enrichr
-    # ---------------------
-    payload = {
-        "list": "\n".join(genes_preview),
-        "description": gene
-    }
-
-    try:
-        r = requests.post("https://maayanlab.cloud/Enrichr/addList", files=payload, timeout=10)
-        r.raise_for_status()
-        uid = r.json().get("userListId")
-        if not uid:
-            st.error("Enrichr 回傳沒有 userListId，無法生成 URL")
-            st.stop()
-    except Exception as e:
-        st.error(f"傳送 Enrichr 發生錯誤：{e}")
-        st.stop()
-
-    # ---------------------
-    # 2️⃣ 生成 Enrichr-KG URL
-    # ---------------------
-    libraries_json = [{"name": lib, "limit": 5} for lib in selected_libraries]
     q_json = {
-        "userListId": str(uid),
-        "libraries": libraries_json,
+        "gene_list": gene_text,
+        "description": description,
+        "libraries": [{"name": library, "limit": 5}],
         "term_limit": 5,
         "min_lib": 1,
         "gene_degree": 3,
         "search": True
     }
 
-    kg_url = f"https://maayanlab.cloud/enrichr-kg?q={urllib.parse.quote(json.dumps(q_json))}"
+    encoded = urllib.parse.quote(json.dumps(q_json))
 
-    # ---------------------
-    # 3️⃣ 顯示連結
-    # ---------------------
-    st.markdown(
-        f'<a href="{kg_url}" target="_blank">🚀 點此打開 Enrichr-KG（前50基因 + description + 多library）</a>',
-        unsafe_allow_html=True
-    )
+    return f"https://maayanlab.cloud/enrichr-kg?q={encoded}"
+
+# =====================
+# ⭐ 一鍵打開 Enrichr-KG
+# =====================
+if st.button("👉 一鍵打開 Enrichr-KG"):
+
+    genes = (
+        result["Symbol"]
+        .dropna()
+        .astype(str)
+        .str.strip()
+        .str.upper()
+        .unique()
+    )[:50]
+
+    if len(genes) == 0:
+        st.warning("篩選後沒有基因")
+    else:
+
+        kg_url = build_enrichr_kg_url(
+            genes,
+            gene,   # Description = 使用者輸入
+            selected_library
+        )
+
+        st.markdown(
+            f'<a href="{kg_url}" target="_blank">🚀 點此打開 Enrichr-KG</a>',
+            unsafe_allow_html=True
+        )
 
 
 
@@ -193,9 +175,24 @@ if st.button("👉 一鍵打開 Enrichr-KG"):
 # KMplot 連結
 # =====================
 st.divider()
+
 st.markdown(
     "[👉 點此進入 KMplot（Breast Cancer prognosis）]"
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
+
 )
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
