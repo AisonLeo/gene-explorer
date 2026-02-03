@@ -98,7 +98,7 @@ st.download_button(
 )
 
 # =====================
-# Enrichr 分析（漂亮輸出版 + 按鈕）
+# Enrichr 分析（漂亮輸出版）
 # =====================
 if st.button("送到 Enrichr（GO / Pathway）"):
 
@@ -151,19 +151,15 @@ if st.button("送到 Enrichr（GO / Pathway）"):
             else:
                 uid = r.json().get("userListId")
                 if uid:
-                    enrichr_url = f"https://maayanlab.cloud/Enrichr/enrich?userListId={uid}"
+                    url = f"https://maayanlab.cloud/Enrichr/enrich?userListId={uid}"
                     st.success("已送出到 Enrichr")
-                    # =====================
-                    # 使用按鈕直接打開
-                    # =====================
-                    if st.button("👉 打開 Enrichr 網頁"):
-                        st.experimental_set_query_params()  # 清除 Streamlit URL 錯誤提示
-                        st.write(f"[點此查看 Enrichr 結果]({enrichr_url})")
+                    st.markdown(f"[👉 點此查看 Enrichr 結果]({url})")
                 else:
                     st.error("Enrichr 回傳沒有 userListId，無法產生連結")
 
         except Exception as e:
             st.error(f"傳送 Enrichr 發生錯誤：{e}")
+
 
 
 # =====================
@@ -176,5 +172,6 @@ st.markdown(
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
 
 )
+
 
 
