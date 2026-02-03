@@ -139,26 +139,26 @@ if st.button("送出到 Enrichr-KG"):
 
         try:
             r = requests.post(
-                "https://maayanlab.cloud/Enrichr/addList",
+                "https://maayanlab.cloud/enrichr-kg/addList",
                 files=payload,
                 timeout=10
             )
 
             if not r.ok:
-                st.error(f"Enrichr 傳送失敗：HTTP {r.status_code}")
+                st.error(f"Enrichr-KG 傳送失敗：HTTP {r.status_code}")
             else:
                 uid = r.json().get("userListId")
                 if uid:
-                    enrichr_url = f"https://maayanlab.cloud/Enrichr-KG/enrich?userListId={uid}&backgroundType={selected_library}"
+                    enrichr_url = f"https://maayanlab.cloud/enrichr-kg/enrich?userListId={uid}&backgroundType={selected_library}"
                     st.success(f"已送出到 Enrichr-KG ({selected_library_name})")
 
                     # 顯示連結給使用者點擊
                     st.markdown(f"[👉 點此查看 Enrichr-KG 結果]({enrichr_url})", unsafe_allow_html=True)
                 else:
-                    st.error("Enrichr 回傳沒有 userListId，無法產生連結")
+                    st.error("Enrichr-KG 回傳沒有 userListId，無法產生連結")
 
         except Exception as e:
-            st.error(f"傳送 Enrichr 發生錯誤：{e}")
+            st.error(f"傳送 Enrichr-KG 發生錯誤：{e}")
 
 
 
@@ -174,6 +174,7 @@ st.markdown(
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
 
 )
+
 
 
 
