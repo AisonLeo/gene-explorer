@@ -173,7 +173,7 @@ if st.button("送出到 Enrichr-KG"):
         try:
             r = requests.post(
                 "https://maayanlab.cloud/Enrichr/addList",
-                data=payload,
+                files=payload,
                 timeout=10
             )
             r.raise_for_status()
@@ -224,6 +224,7 @@ st.markdown(
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
 
 )
+
 
 
 
