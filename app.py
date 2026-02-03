@@ -1,20 +1,27 @@
-from pathlib import Path
 from io import BytesIO
+from pathlib import Path
 import streamlit as st
 import pandas as pd
-import time
-from selenium import webdriver
-from selenium.webdriver.common.by import By
+import json
+import requests
+import urllib.parse
 
 # =====================
 # Streamlit 設定
 # =====================
-st.set_page_config(page_title="Gene Explorer - Enrichr-KG", layout="wide")
+st.set_page_config(
+    page_title="Gene Explorer - Enrichr-KG",
+    layout="wide"
+)
 
 # =====================
-# 讀取資料
+# 資料路徑
 # =====================
 DATA_PATH = Path("data/578T_Tax660_vs_578T_Parental.xlsx")
+
+# =====================
+# 讀取基因資料
+# =====================
 @st.cache_data
 def load_data():
     df = pd.read_excel(DATA_PATH)
@@ -23,11 +30,40 @@ def load_data():
 df = load_data()
 
 # =====================
-# 使用者輸入
+# 取得全部 Enrichr Library
+# =====================
+@st.cache_data
+def load_enrichr_libraries():
+    url = "https://maayanlab.cloud/Enrichr/datasetStatistics"
+    r = requests.get(url)
+    r.raise_for_status()
+    data = r.json()
+    return sorted([lib["libraryName"] for lib in data["statistics"]])
+
+library_list = load_enrichr_libraries()
+
+# =====================
+# 標題
 # =====================
 st.title("log2FoldChange Gene Explorer")
 
-gene_input = st.text_input("請輸入 Gene Symbol（作為 Description）")
+# =====================
+# Gene 查詢
+# =====================
+gene = st.text_input("請輸入 Gene Symbol（會當作 Description）")
+
+if gene:
+    if gene in df["Symbol"].values:
+        gene_fc = df.loc[df["Symbol"] == gene, "log2FoldChange"].values[0]
+        st.success(f"{gene} 的 log2FoldChange = {gene_fc:.3f}")
+    else:
+        st.error("找不到此 Gene")
+        st.stop()
+
+# =====================
+# 篩選條件
+# =====================
+st.subheader("基因篩選條件")
 
 fc_threshold = st.slider(
     "log2FoldChange 閾值",
@@ -39,11 +75,12 @@ fc_threshold = st.slider(
 
 use_padj = st.checkbox("只顯示 padj < 0.05", True)
 
-direction = st.radio("調控方向", ["Up-regulated", "Down-regulated"])
+direction = st.radio(
+    "調控方向",
+    ["Up-regulated", "Down-regulated"]
+)
 
-# =====================
-# 篩選基因
-# =====================
+# 篩選
 if direction == "Up-regulated":
     result = df[df["log2FoldChange"] >= fc_threshold]
 else:
@@ -55,27 +92,47 @@ if use_padj:
 st.write(f"符合條件的 gene 數量：{len(result)}")
 st.dataframe(result, use_container_width=True)
 
-# 前50基因
-genes_preview = result["Symbol"].dropna().astype(str).str.strip().str.upper().unique()[:50]
+# =====================
+# 下載 Excel
+# =====================
+buffer = BytesIO()
+result.to_excel(buffer, index=False, engine="openpyxl")
+buffer.seek(0)
+
+st.download_button(
+    "下載篩選後基因清單",
+    buffer,
+    file_name="filtered_genes.xlsx"
+)
+
+# =====================
+# 多 Library 選擇
+# =====================
+selected_libraries = st.multiselect(
+    "選擇分析庫（可多選）",
+    library_list,
+    default=["KEGG_2021_Human"]
+)
+st.markdown("💡 多選方式：點選下拉選單中的項目，列表中會累加，點叉號可取消")
+
+# =====================
+# 前50基因預覽
+# =====================
+genes_preview = (
+    result["Symbol"]
+    .dropna()
+    .astype(str)
+    .str.strip()
+    .str.upper()
+    .unique()
+)[:50]
+
 if len(genes_preview) > 0:
-    st.subheader("前50基因預覽")
+    st.subheader("前50筆基因預覽（送到 Enrichr-KG）")
     st.text_area("Gene List Preview", "\n".join(genes_preview), height=200)
 
 # =====================
-# Library 多選
-# =====================
-library_list = [
-    "KEGG_2021_Human",
-    "GO_Biological_Process_2021",
-    "GO_Molecular_Function_2021",
-    "GO_Cellular_Component_2021",
-    "Reactome_2022"
-]
-
-selected_libraries = st.multiselect("選擇分析庫（可多選）", library_list, default=["KEGG_2021_Human"])
-
-# =====================
-# 一鍵打開 Enrichr-KG
+# 一鍵打開 Enrichr-KG（自動填 description）
 # =====================
 if st.button("🚀 一鍵打開 Enrichr-KG"):
 
@@ -87,43 +144,54 @@ if st.button("🚀 一鍵打開 Enrichr-KG"):
         st.warning("請至少選一個 library")
         st.stop()
 
-    st.info("正在打開瀏覽器，請稍候...")
+    # ---------------------
+    # 1️⃣ POST gene list 到 Enrichr（包含 description）
+    # ---------------------
+    payload = {
+        "list": "\n".join(genes_preview),
+        "description": gene
+    }
 
-    # =====================
-    # Selenium 打開瀏覽器
-    # =====================
-    driver = webdriver.Chrome()  # 若需指定路徑：webdriver.Chrome(executable_path="path/to/chromedriver")
-    driver.get("https://maayanlab.cloud/enrichr-kg")
-    time.sleep(3)  # 等待前端載入
-
-    # 填左側基因框
     try:
-        gene_box = driver.find_element(By.CSS_SELECTOR, "textarea#geneListInput")
-        gene_box.clear()
-        gene_box.send_keys("\n".join(genes_preview))
-    except:
-        st.error("無法找到左側基因框，請確認 Enrichr-KG 前端未改版")
+        r = requests.post(
+            "https://maayanlab.cloud/Enrichr/addList",
+            files=payload,
+            timeout=10
+        )
+        r.raise_for_status()
+        uid = r.json().get("userListId")
+        if not uid:
+            st.error("Enrichr 回傳沒有 userListId，無法生成 URL")
+            st.stop()
+    except Exception as e:
+        st.error(f"傳送 Enrichr 發生錯誤：{e}")
+        st.stop()
 
-    # 填 description
-    try:
-        desc_box = driver.find_element(By.CSS_SELECTOR, "input#descriptionInput")
-        desc_box.clear()
-        desc_box.send_keys(gene_input)
-    except:
-        st.error("無法找到 description 輸入框，請確認 Enrichr-KG 前端未改版")
+    # ---------------------
+    # 2️⃣ 生成 Enrichr-KG q= JSON URL（自動填左側基因 + description）
+    # ---------------------
+    libraries_json = [{"name": lib, "limit": 5} for lib in selected_libraries]
+    q_json = {
+        "userListId": str(uid),
+        "libraries": libraries_json,
+        "term_limit": 5,
+        "min_lib": 1,
+        "gene_degree": 3,
+        "search": True
+    }
 
-    # 選 library
-    for lib in selected_libraries:
-        lib = lib.strip()
-        try:
-            checkbox = driver.find_element(By.XPATH, f"//label[contains(text(), '{lib}')]//input[@type='checkbox']")
-            if not checkbox.is_selected():
-                checkbox.click()
-        except:
-            st.warning(f"找不到 library: {lib}")
+    kg_url = f"https://maayanlab.cloud/enrichr-kg?q={urllib.parse.quote(json.dumps(q_json))}"
 
-    st.success("瀏覽器已打開，左側基因與 description 已填好，請點 Analyze 開始分析！")
+    # ---------------------
+    # 3️⃣ 顯示連結
+    # ---------------------
+    st.markdown(
+        f'<a href="{kg_url}" target="_blank">🔗 點此打開 Enrichr-KG（前50基因 + description + 多library）</a>',
+        unsafe_allow_html=True
+    )
 
+    # ✅ 顯示 description 提示
+    st.info(f"Description 已自動填入使用者輸入的 Gene Symbol: **{gene}**")
 
 
 
@@ -142,6 +210,7 @@ st.markdown(
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
 
 )
+
 
 
 
