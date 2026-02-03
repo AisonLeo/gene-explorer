@@ -196,12 +196,11 @@ if st.button("🚀 一鍵打開 Enrichr-KG"):
     # 3️⃣ 顯示連結
     # ---------------------
     st.markdown(
-        f'<div style="margin: 20px 0;"><a href="{kg_url}" target="_blank" style="padding: 10px 20px; background-color: #ff4b4b; color: white; border-radius: 5px; text-decoration: none; font-weight: bold;">🔗 點此打開 Enrichr-KG（自動帶入基因與 Description）</a></div>',
+        f'<div style="margin: 20px 0;"><a href="{kg_url}" target="_blank" style="padding: 10px 20px; background-color: #ff4b4b; color: white; border-radius: 5px; text-decoration: none; font-weight: bold;">🔗 點此打開 Enrichr-KG</a></div>',
         unsafe_allow_html=True
     )
 
-    # ✅ 顯示 description 提示
-    st.info(f"Description 已設定為: **{description_text}**")
+    
 
 
 # =====================
@@ -213,3 +212,4 @@ st.markdown(
     "[👉 點此進入 KMplot（Breast Cancer prognosis）]"
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
 )
+
