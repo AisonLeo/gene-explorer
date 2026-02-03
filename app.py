@@ -1,18 +1,27 @@
+from io import BytesIO
 from pathlib import Path
 import streamlit as st
 import pandas as pd
 import json
+import requests
 import urllib.parse
 
 # =====================
 # Streamlit 設定
 # =====================
-st.set_page_config(page_title="Gene Explorer - Enrichr-KG", layout="wide")
+st.set_page_config(
+    page_title="Gene Explorer - Enrichr-KG",
+    layout="wide"
+)
 
 # =====================
-# 讀取資料
+# 資料路徑
 # =====================
 DATA_PATH = Path("data/578T_Tax660_vs_578T_Parental.xlsx")
+
+# =====================
+# 讀取基因資料
+# =====================
 @st.cache_data
 def load_data():
     df = pd.read_excel(DATA_PATH)
@@ -21,11 +30,40 @@ def load_data():
 df = load_data()
 
 # =====================
-# 使用者輸入
+# 取得全部 Enrichr Library
+# =====================
+@st.cache_data
+def load_enrichr_libraries():
+    url = "https://maayanlab.cloud/Enrichr/datasetStatistics"
+    r = requests.get(url)
+    r.raise_for_status()
+    data = r.json()
+    return sorted([lib["libraryName"] for lib in data["statistics"]])
+
+library_list = load_enrichr_libraries()
+
+# =====================
+# 標題
 # =====================
 st.title("log2FoldChange Gene Explorer")
 
-gene_input = st.text_input("請輸入 Gene Symbol（作為 Description）")
+# =====================
+# Gene 查詢
+# =====================
+gene = st.text_input("請輸入 Gene Symbol（會當作 Description）")
+
+if gene:
+    if gene in df["Symbol"].values:
+        gene_fc = df.loc[df["Symbol"] == gene, "log2FoldChange"].values[0]
+        st.success(f"{gene} 的 log2FoldChange = {gene_fc:.3f}")
+    else:
+        st.error("找不到此 Gene")
+        st.stop()
+
+# =====================
+# 篩選條件
+# =====================
+st.subheader("基因篩選條件")
 
 fc_threshold = st.slider(
     "log2FoldChange 閾值",
@@ -37,11 +75,12 @@ fc_threshold = st.slider(
 
 use_padj = st.checkbox("只顯示 padj < 0.05", True)
 
-direction = st.radio("調控方向", ["Up-regulated", "Down-regulated"])
+direction = st.radio(
+    "調控方向",
+    ["Up-regulated", "Down-regulated"]
+)
 
-# =====================
-# 篩選基因
-# =====================
+# 篩選
 if direction == "Up-regulated":
     result = df[df["log2FoldChange"] >= fc_threshold]
 else:
@@ -53,27 +92,47 @@ if use_padj:
 st.write(f"符合條件的 gene 數量：{len(result)}")
 st.dataframe(result, use_container_width=True)
 
-# 前50基因
-genes_preview = result["Symbol"].dropna().astype(str).str.strip().str.upper().unique()[:50]
+# =====================
+# 下載 Excel
+# =====================
+buffer = BytesIO()
+result.to_excel(buffer, index=False, engine="openpyxl")
+buffer.seek(0)
+
+st.download_button(
+    "下載篩選後基因清單",
+    buffer,
+    file_name="filtered_genes.xlsx"
+)
+
+# =====================
+# 多 Library 選擇
+# =====================
+selected_libraries = st.multiselect(
+    "選擇分析庫（可多選）",
+    library_list,
+    default=["KEGG_2021_Human"]
+)
+st.markdown("💡 多選方式：點選下拉選單中的項目，列表中會累加，點叉號可取消")
+
+# =====================
+# 前50基因預覽
+# =====================
+genes_preview = (
+    result["Symbol"]
+    .dropna()
+    .astype(str)
+    .str.strip()
+    .str.upper()
+    .unique()
+)[:50]
+
 if len(genes_preview) > 0:
-    st.subheader("前50基因預覽")
+    st.subheader("前50筆基因預覽（送到 Enrichr-KG）")
     st.text_area("Gene List Preview", "\n".join(genes_preview), height=200)
 
 # =====================
-# Library 多選
-# =====================
-library_list = [
-    "KEGG_2021_Human",
-    "GO_Biological_Process_2021",
-    "GO_Molecular_Function_2021",
-    "GO_Cellular_Component_2021",
-    "Reactome_2022"
-]
-
-selected_libraries = st.multiselect("選擇分析庫（可多選）", library_list, default=["KEGG_2021_Human"])
-
-# =====================
-# 生成一鍵打開 HTML
+# 一鍵打開 Enrichr-KG（自動填 description）
 # =====================
 if st.button("🚀 一鍵打開 Enrichr-KG"):
 
@@ -85,28 +144,54 @@ if st.button("🚀 一鍵打開 Enrichr-KG"):
         st.warning("請至少選一個 library")
         st.stop()
 
-    # 準備基因 & description
-    genes_js = json.dumps(list(genes_preview))
-    description_js = json.dumps(gene_input)
-    libraries_js = json.dumps(selected_libraries)
+    # ---------------------
+    # 1️⃣ POST gene list 到 Enrichr（包含 description）
+    # ---------------------
+    payload = {
+        "list": "\n".join(genes_preview),
+        "description": gene
+    }
 
-    # 產生一個 HTML 按鈕，點擊後 JS 將自動填入 KG
-    html_code = f"""
-    <button onclick="
-        const geneBox = document.querySelector('#geneListInput');
-        const descBox = document.querySelector('#descriptionInput');
-        if (geneBox) geneBox.value = {genes_js}.join('\\n');
-        if (descBox) descBox.value = {description_js};
-        alert('前50基因與 description 已填好，請點 Analyze 開始分析!');
-    ">點此打開 Enrichr-KG 並自動填資料</button>
-    <script>
-        // 自動跳轉到 Enrichr-KG 網頁
-        window.open('https://maayanlab.cloud/enrichr-kg', '_blank');
-    </script>
-    """
+    try:
+        r = requests.post(
+            "https://maayanlab.cloud/Enrichr/addList",
+            files=payload,
+            timeout=10
+        )
+        r.raise_for_status()
+        uid = r.json().get("userListId")
+        if not uid:
+            st.error("Enrichr 回傳沒有 userListId，無法生成 URL")
+            st.stop()
+    except Exception as e:
+        st.error(f"傳送 Enrichr 發生錯誤：{e}")
+        st.stop()
 
-    st.components.v1.html(html_code, height=100)
+    # ---------------------
+    # 2️⃣ 生成 Enrichr-KG q= JSON URL（自動填左側基因 + description）
+    # ---------------------
+    libraries_json = [{"name": lib, "limit": 5} for lib in selected_libraries]
+    q_json = {
+        "userListId": str(uid),
+        "libraries": libraries_json,
+        "term_limit": 5,
+        "min_lib": 1,
+        "gene_degree": 3,
+        "search": True
+    }
 
+    kg_url = f"https://maayanlab.cloud/enrichr-kg?q={urllib.parse.quote(json.dumps(q_json))}"
+
+    # ---------------------
+    # 3️⃣ 顯示連結
+    # ---------------------
+    st.markdown(
+        f'<a href="{kg_url}" target="_blank">🔗 點此打開 Enrichr-KG（前50基因 + description + 多library）</a>',
+        unsafe_allow_html=True
+    )
+
+    # ✅ 顯示 description 提示
+    st.info(f"Description 已自動填入使用者輸入的 Gene Symbol: **{gene}**")
 
 
 
@@ -124,6 +209,7 @@ st.markdown(
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
 
 )
+
 
 
 
