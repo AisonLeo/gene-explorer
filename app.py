@@ -135,7 +135,7 @@ if len(genes_preview) > 0:
 # =====================
 # 一鍵打開 Enrichr-KG（自動填 description）
 # =====================
-if st.button("🚀 一鍵打開 Enrichr-KG"):
+if st.button("🚀 一鍵匯入 Enrichr-KG"):
 
     if len(genes_preview) == 0:
         st.warning("篩選後沒有基因")
@@ -165,10 +165,10 @@ if st.button("🚀 一鍵打開 Enrichr-KG"):
         r.raise_for_status()
         uid = r.json().get("userListId")
         if not uid:
-            st.error("Enrichr 回傳沒有 userListId，無法生成 URL")
+            st.error("Enrichr-KG 回傳沒有 userListId，無法生成 URL")
             st.stop()
     except Exception as e:
-        st.error(f"傳送 Enrichr 發生錯誤：{e}")
+        st.error(f"傳送 Enrichr-KG 發生錯誤：{e}")
         st.stop()
 
     # ---------------------
@@ -212,4 +212,5 @@ st.markdown(
     "[👉 點此進入 KMplot（Breast Cancer prognosis）]"
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
 )
+
 
