@@ -1,13 +1,15 @@
 from io import BytesIO
 from pathlib import Path
 import re
+import json
+import urllib.parse
 
 import streamlit as st
 import pandas as pd
 import requests
 
 # =====================
-# Streamlit 頁面設定
+# Streamlit 設定
 # =====================
 st.set_page_config(
     page_title="Gene Explorer - Enrichr-KG",
@@ -38,7 +40,7 @@ df = load_data()
 st.title("log2FoldChange Gene Explorer")
 
 # =====================
-# 第一階段：Gene 查詢
+# Gene 查詢
 # =====================
 gene = st.text_input("請輸入 Gene Symbol（例如 ESR1）")
 
@@ -51,7 +53,7 @@ if gene:
         st.stop()
 
 # =====================
-# 第二階段：篩選條件
+# 篩選條件
 # =====================
 st.subheader("基因篩選條件")
 
@@ -70,7 +72,6 @@ direction = st.radio(
     ["Up-regulated", "Down-regulated"]
 )
 
-# 篩選邏輯
 if direction == "Up-regulated":
     result = df[df["log2FoldChange"] >= fc_threshold]
 else:
@@ -79,7 +80,6 @@ else:
 if use_padj:
     result = result[result["padj"] < 0.05]
 
-# 顯示結果
 st.write(f"符合條件的 gene 數量：{len(result)}")
 st.dataframe(result, use_container_width=True)
 
@@ -100,41 +100,26 @@ st.download_button(
 # =====================
 st.subheader("送到 Enrichr-KG 分析")
 
-# ---- Enrichr-KG library 選單 ----
+# ---- Library 選單 ----
 library_options = {
     "KEGG": "KEGG_2021_Human",
     "Reactome": "Reactome_2022",
     "WikiPathways": "WikiPathways_2022_Human",
     "GO Biological Process": "GO_Biological_Process_2021",
     "GO Molecular Function": "GO_Molecular_Function_2021",
-    "GO Cellular Component": "GO_Cellular_Component_2021",
-    "ARCHS4 TFs": "ARCHS4_TFs_Coexp",
-    "ChEA3": "ChEA3_2022",
-    "TRRUST": "TRRUST_Transcription_Factors_2019",
-    "FANTOM6": "FANTOM6_TFs",
-    "DisGeNET": "DisGeNET",
-    "GWAS Catalog": "GWAS_Catalog_2022",
-    "LINCS (Small Molecule)": "LINCS_L1000_Chem_Pert_up",
-    "LINCS (CRISPR KO)": "LINCS_L1000_CRISPRKO_gene",
-    "Achilles": "Achilles_2021",
-    "Proteomics Drug Atlas": "Proteomics_Drug_Atlas",
-    "Human Gene Atlas": "Human_Gene_Atlas",
-    "CCLE Proteomics": "CCLE_Proteomics",
-    "Descartes": "Descartes_Cell_Types",
-    "Tabula Muris": "Tabula_Muris",
-    "Tabula Sapiens": "Tabula_Sapiens",
-    "Pfam": "Pfam_2021"
+    "GO Cellular Component": "GO_Cellular_Component_2021"
+    # 可擴展更多 library
 }
 
 selected_library_name = st.selectbox("選擇分析庫", options=list(library_options.keys()))
 selected_library = library_options[selected_library_name]
 
 # =====================
-# 送到 Enrichr-KG 按鈕
+# 送出到 Enrichr-KG 按鈕
 # =====================
 if st.button("送出到 Enrichr-KG"):
 
-    # 篩選前50個基因
+    # 前50個基因
     genes = (
         result["Symbol"]
         .dropna()
@@ -149,7 +134,6 @@ if st.button("送出到 Enrichr-KG"):
     if len(genes) == 0:
         st.warning("篩選後沒有基因可送出")
     else:
-
         st.subheader("送出的 Gene List（前 50 個）")
         st.text_area("Gene List (Preview)", "\n".join(genes), height=200)
 
@@ -157,10 +141,7 @@ if st.button("送出到 Enrichr-KG"):
 
         # 上傳到 Enrichr
         genes_str = "\n".join(genes)
-        payload = {
-            "list": (None, genes_str),
-            "description": (None, desc)
-        }
+        payload = {"list": (None, genes_str), "description": (None, desc)}
 
         try:
             r = requests.post(
@@ -173,16 +154,27 @@ if st.button("送出到 Enrichr-KG"):
             uid = res.get("userListId")
 
             if uid:
-                enrichr_url = f"https://maayanlab.cloud/enrichr-kg/enrich?userListId={uid}&backgroundType={selected_library}"
-                st.success(f"已準備好 Enrichr-KG ({selected_library_name})")
+                # =====================
+                # 生成完整 query URL (JSON -> URL encode)
+                # =====================
+                query_dict = {
+                    "term_limit": 5,
+                    "min_lib": 1,
+                    "gene_degree": 3,
+                    "libraries": [{"name": selected_library, "limit": 5}],
+                    "userListId": str(uid),
+                    "search": True
+                }
+                query_str = json.dumps(query_dict)
+                query_encoded = urllib.parse.quote(query_str)
+                enrichr_url = f"https://maayanlab.cloud/enrichr-kg?q={query_encoded}"
 
-                # 一鍵打開新分頁
+                st.success(f"已準備好 Enrichr-KG ({selected_library_name})")
                 st.markdown(
                     f'<a href="{enrichr_url}" target="_blank">'
                     f'👉 點此一鍵打開 Enrichr-KG (Gene List 已填)</a>',
                     unsafe_allow_html=True
                 )
-
                 st.info(f"Description: {desc} （請在 Enrichr-KG 前端手動填入）")
 
             else:
@@ -197,8 +189,6 @@ if st.button("送出到 Enrichr-KG"):
 
 
 
-
-
 # =====================
 # KMplot 連結
 # =====================
@@ -209,6 +199,7 @@ st.markdown(
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
 
 )
+
 
 
 
