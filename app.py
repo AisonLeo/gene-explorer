@@ -168,7 +168,7 @@ if st.button("🚀 一鍵打開 Enrichr-KG"):
         st.stop()
 
     # ---------------------
-    # 2️⃣ 生成 Enrichr-KG URL（自動填左側基因 + description）
+    # 2️⃣ 生成 Enrichr-KG q= JSON URL（自動填左側基因 + description）
     # ---------------------
     libraries_json = [{"name": lib, "limit": 5} for lib in selected_libraries]
     q_json = {
@@ -199,6 +199,7 @@ if st.button("🚀 一鍵打開 Enrichr-KG"):
 
 
 
+
 # =====================
 # KMplot 連結
 # =====================
@@ -209,6 +210,7 @@ st.markdown(
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
 
 )
+
 
 
 
