@@ -98,39 +98,42 @@ st.download_button(
 )
 
 # =====================
-# Enrichr 分析（漂亮輸出版）
+# Enrichr 分析（下拉選 library + 按鈕版）
 # =====================
-if st.button("送到 Enrichr（GO / Pathway）"):
+st.subheader("送到 Enrichr（GO / Pathway）分析")
 
+# 下拉選 library
+library_options = {
+    "KEGG": "KEGG_2021_Human",
+    "GO Biological Process": "GO_Biological_Process_2021",
+    "GO Molecular Function": "GO_Molecular_Function_2021",
+    "GO Cellular Component": "GO_Cellular_Component_2021",
+    "Reactome": "Reactome_2022"
+}
+selected_library_name = st.selectbox("選擇分析庫", options=list(library_options.keys()))
+selected_library = library_options[selected_library_name]
+
+# 按鈕送出
+if st.button("送出到 Enrichr"):
     # 取 gene list，清理格式
     genes = (
         result["Symbol"]
         .dropna()
         .astype(str)
-        .str.strip()        # 去掉空白
-        .str.upper()        # 轉大寫
+        .str.strip()
+        .str.upper()
         .unique()
     )
-
-    # 過濾非字母數字（避免奇怪符號）
     genes = [g for g in genes if g.isalnum()]
-
-    # 只取前 50 個基因
     genes = genes[:50]
 
-    # 檢查是否有 gene
     if len(genes) == 0:
         st.warning("篩選後沒有基因可送出")
     else:
-        # =====================
-        # 乾淨顯示送出的 genes
-        # =====================
         st.subheader("送出的 Gene List（前 50 個）")
         st.markdown("```\n" + "\n".join(genes) + "\n```")
 
         genes_str = "\n".join(genes)
-
-        # 使用官方建議的 files 格式
         payload = {
             "list": (None, genes_str),
             "description": (None, "Streamlit gene list")
@@ -140,25 +143,25 @@ if st.button("送到 Enrichr（GO / Pathway）"):
             r = requests.post(
                 "https://maayanlab.cloud/Enrichr/addList",
                 files=payload,
-                timeout=10  # 避免 Cloud 過久無回應
+                timeout=10
             )
-
-            # 顯示 HTTP status
-            st.write("HTTP status:", r.status_code)
 
             if not r.ok:
                 st.error(f"Enrichr 傳送失敗：HTTP {r.status_code}")
             else:
                 uid = r.json().get("userListId")
                 if uid:
-                    url = f"https://maayanlab.cloud/Enrichr/enrich?userListId={uid}"
-                    st.success("已送出到 Enrichr")
-                    st.markdown(f"[👉 點此查看 Enrichr 結果]({url})")
+                    enrichr_url = f"https://maayanlab.cloud/Enrichr/enrich?userListId={uid}&backgroundType={selected_library}"
+                    st.success(f"已送出到 Enrichr ({selected_library_name})")
+                    # 按鈕直接打開結果
+                    if st.button(f"👉 查看 Enrichr {selected_library_name} 結果"):
+                        st.markdown(f"[點此查看 Enrichr {selected_library_name} 結果]({enrichr_url})", unsafe_allow_html=True)
                 else:
                     st.error("Enrichr 回傳沒有 userListId，無法產生連結")
 
         except Exception as e:
             st.error(f"傳送 Enrichr 發生錯誤：{e}")
+
 
 
 
@@ -172,6 +175,7 @@ st.markdown(
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
 
 )
+
 
 
 
