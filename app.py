@@ -119,7 +119,7 @@ if st.button("送到 Enrichr（GO / Pathway）"):
 
         r = requests.post(
             "https://maayanlab.cloud/Enrichr/addList",
-            data=payload
+            files=payload
         )
 
         if r.status_code == 200:
@@ -138,4 +138,5 @@ st.divider()
 st.markdown(
     "[👉 點此進入 KMplot（Breast Cancer prognosis）]"
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
+
 )
