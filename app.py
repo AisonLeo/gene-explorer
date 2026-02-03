@@ -102,33 +102,27 @@ st.subheader("送到 Enrichr-KG 分析")
 
 # ---- Enrichr-KG library 選單 ----
 library_options = {
-    # Pathways
     "KEGG": "KEGG_2021_Human",
     "Reactome": "Reactome_2022",
     "WikiPathways": "WikiPathways_2022_Human",
-    # Gene Ontology
     "GO Biological Process": "GO_Biological_Process_2021",
     "GO Molecular Function": "GO_Molecular_Function_2021",
     "GO Cellular Component": "GO_Cellular_Component_2021",
-    # TF / Transcription
     "ARCHS4 TFs": "ARCHS4_TFs_Coexp",
     "ChEA3": "ChEA3_2022",
     "TRRUST": "TRRUST_Transcription_Factors_2019",
     "FANTOM6": "FANTOM6_TFs",
-    # Diseases / Drugs
     "DisGeNET": "DisGeNET",
     "GWAS Catalog": "GWAS_Catalog_2022",
     "LINCS (Small Molecule)": "LINCS_L1000_Chem_Pert_up",
     "LINCS (CRISPR KO)": "LINCS_L1000_CRISPRKO_gene",
     "Achilles": "Achilles_2021",
     "Proteomics Drug Atlas": "Proteomics_Drug_Atlas",
-    # Cell Types
     "Human Gene Atlas": "Human_Gene_Atlas",
     "CCLE Proteomics": "CCLE_Proteomics",
     "Descartes": "Descartes_Cell_Types",
     "Tabula Muris": "Tabula_Muris",
     "Tabula Sapiens": "Tabula_Sapiens",
-    # Other
     "Pfam": "Pfam_2021"
 }
 
@@ -156,13 +150,12 @@ if st.button("送出到 Enrichr-KG"):
         st.warning("篩選後沒有基因可送出")
     else:
 
-        # 顯示基因清單 & description
         st.subheader("送出的 Gene List（前 50 個）")
         st.text_area("Gene List (Preview)", "\n".join(genes), height=200)
 
         desc = st.text_input("Description（自動填入）", value=gene.upper())
 
-        # 上傳到 Enrichr 得到 userListId
+        # 上傳到 Enrichr
         genes_str = "\n".join(genes)
         payload = {
             "list": (None, genes_str),
@@ -172,7 +165,7 @@ if st.button("送出到 Enrichr-KG"):
         try:
             r = requests.post(
                 "https://maayanlab.cloud/Enrichr/addList",
-                files=payload,  # 官方建議使用 files
+                files=payload,
                 timeout=10
             )
             r.raise_for_status()
@@ -182,7 +175,14 @@ if st.button("送出到 Enrichr-KG"):
             if uid:
                 enrichr_url = f"https://maayanlab.cloud/enrichr-kg/enrich?userListId={uid}&backgroundType={selected_library}"
                 st.success(f"已準備好 Enrichr-KG ({selected_library_name})")
-                st.markdown(f"[👉 點此打開 Enrichr-KG (Gene List 已填)]({enrichr_url})", unsafe_allow_html=True)
+
+                # 一鍵打開新分頁
+                st.markdown(
+                    f'<a href="{enrichr_url}" target="_blank">'
+                    f'👉 點此一鍵打開 Enrichr-KG (Gene List 已填)</a>',
+                    unsafe_allow_html=True
+                )
+
                 st.info(f"Description: {desc} （請在 Enrichr-KG 前端手動填入）")
 
             else:
@@ -199,7 +199,6 @@ if st.button("送出到 Enrichr-KG"):
 
 
 
-
 # =====================
 # KMplot 連結
 # =====================
@@ -210,6 +209,7 @@ st.markdown(
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
 
 )
+
 
 
 
