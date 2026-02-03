@@ -1,8 +1,11 @@
 from io import BytesIO
 from pathlib import Path
+import re
+
 import streamlit as st
 import pandas as pd
 import requests
+import base64
 
 # =====================
 # Streamlit 頁面設定
@@ -41,9 +44,9 @@ st.title("log2FoldChange Gene Explorer")
 gene = st.text_input("請輸入 Gene Symbol（例如 ESR1）")
 
 if gene:
-    if gene in df["Symbol"].values:
-        gene_fc = df.loc[df["Symbol"] == gene, "log2FoldChange"].values[0]
-        st.success(f"{gene} 的 log2FoldChange = {gene_fc:.3f}")
+    if gene.upper() in df["Symbol"].str.upper().values:
+        gene_fc = df.loc[df["Symbol"].str.upper() == gene.upper(), "log2FoldChange"].values[0]
+        st.success(f"{gene.upper()} 的 log2FoldChange = {gene_fc:.3f}")
     else:
         st.error("找不到此 Gene")
         st.stop()
@@ -98,20 +101,47 @@ st.download_button(
 # =====================
 st.subheader("送到 Enrichr-KG 分析")
 
-# Library 選單
+# ---- Enrichr-KG library 選單 ----
 library_options = {
+    # Pathways
     "KEGG": "KEGG_2021_Human",
+    "Reactome": "Reactome_2022",
+    "WikiPathways": "WikiPathways_2022_Human",
+    # Gene Ontology
     "GO Biological Process": "GO_Biological_Process_2021",
     "GO Molecular Function": "GO_Molecular_Function_2021",
     "GO Cellular Component": "GO_Cellular_Component_2021",
-    "Reactome": "Reactome_2022"
+    # TF / Transcription
+    "ARCHS4 TFs": "ARCHS4_TFs_Coexp",
+    "ChEA3": "ChEA3_2022",
+    "TRRUST": "TRRUST_Transcription_Factors_2019",
+    "FANTOM6": "FANTOM6_TFs",
+    # Diseases / Drugs
+    "DisGeNET": "DisGeNET",
+    "GWAS Catalog": "GWAS_Catalog_2022",
+    "LINCS (Small Molecule)": "LINCS_L1000_Chem_Pert_up",
+    "LINCS (CRISPR KO)": "LINCS_L1000_CRISPRKO_gene",
+    "Achilles": "Achilles_2021",
+    "Proteomics Drug Atlas": "Proteomics_Drug_Atlas",
+    # Cell Types
+    "Human Gene Atlas": "Human_Gene_Atlas",
+    "CCLE Proteomics": "CCLE_Proteomics",
+    "Descartes": "Descartes_Cell_Types",
+    "Tabula Muris": "Tabula_Muris",
+    "Tabula Sapiens": "Tabula_Sapiens",
+    # Other
+    "Pfam": "Pfam_2021"
 }
+
 selected_library_name = st.selectbox("選擇分析庫", options=list(library_options.keys()))
 selected_library = library_options[selected_library_name]
 
+# =====================
+# 送到 Enrichr-KG 按鈕
+# =====================
 if st.button("送出到 Enrichr-KG"):
 
-    # 取前50個 Gene 並清理格式
+    # 篩選前50個基因
     genes = (
         result["Symbol"]
         .dropna()
@@ -120,45 +150,65 @@ if st.button("送出到 Enrichr-KG"):
         .str.upper()
         .unique()
     )
-    genes = [g for g in genes if g.isalnum()]
+    genes = [g for g in genes if re.match(r"^[A-Z0-9\-]+$", g)]
     genes = genes[:50]
 
     if len(genes) == 0:
         st.warning("篩選後沒有基因可送出")
     else:
-        # 左側框顯示
-        st.subheader("送出的 Gene List（前 50 個）")
-        st.text_area("Gene List (左側框)", "\n".join(genes), height=200)
 
-        # 上傳到 Enrichr-KG
+        # 顯示基因清單 & description
+        st.subheader("送出的 Gene List（前 50 個）")
+        st.text_area("Gene List (Preview)", "\n".join(genes), height=200)
+
+        desc = st.text_input("Description（將自動填入）", value=gene.upper())
+
+        # 上傳到 Enrichr 得到 userListId
         genes_str = "\n".join(genes)
         payload = {
-            "list": (None, genes_str),
-            "description": (None, "Streamlit gene list")
+            "list": genes_str,
+            "description": desc
         }
 
         try:
             r = requests.post(
-                "https://maayanlab.cloud/enrichr-kg/addList",
-                files=payload,
+                "https://maayanlab.cloud/Enrichr/addList",
+                data=payload,
                 timeout=10
             )
+            r.raise_for_status()
+            res = r.json()
+            uid = res.get("userListId")
 
-            if not r.ok:
-                st.error(f"Enrichr-KG 傳送失敗：HTTP {r.status_code}")
+            if uid:
+                # 自動生成 HTML 來 POST 到 Enrichr-KG
+                html_content = f"""
+                <html>
+                <body onload="document.forms[0].submit();">
+                  <form method="POST" action="https://maayanlab.cloud/enrichr-kg/enrich?userListId={uid}&backgroundType={selected_library}">
+                    <input type="hidden" name="description" value="{desc}">
+                    <input type="hidden" name="genes" value="{','.join(genes)}">
+                  </form>
+                  <p>正在開啟 Enrichr-KG，請稍候...</p>
+                </body>
+                </html>
+                """
+
+                # 將 HTML 轉 Base64，生成可以點擊的連結
+                b64 = base64.b64encode(html_content.encode()).decode()
+                href = f'data:text/html;base64,{b64}'
+
+                st.markdown(
+                    f'<a href="{href}" target="_blank">👉 點此打開 Enrichr-KG（自動填基因與 Description）</a>',
+                    unsafe_allow_html=True
+                )
+                st.success(f"已準備好 Enrichr-KG ({selected_library_name})")
+
             else:
-                uid = r.json().get("userListId")
-                if uid:
-                    enrichr_url = f"https://maayanlab.cloud/enrichr-kg/enrich?userListId={uid}&backgroundType={selected_library}"
-                    st.success(f"已送出到 Enrichr-KG ({selected_library_name})")
-
-                    # 顯示連結給使用者點擊
-                    st.markdown(f"[👉 點此查看 Enrichr-KG 結果]({enrichr_url})", unsafe_allow_html=True)
-                else:
-                    st.error("Enrichr-KG 回傳沒有 userListId，無法產生連結")
+                st.error("Enrichr 回傳沒有 userListId，無法產生連結")
 
         except Exception as e:
-            st.error(f"傳送 Enrichr-KG 發生錯誤：{e}")
+            st.error(f"傳送到 Enrichr 發生錯誤：{e}")
 
 
 
@@ -174,6 +224,7 @@ st.markdown(
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
 
 )
+
 
 
 
