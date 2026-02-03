@@ -30,7 +30,7 @@ def load_data():
 df = load_data()
 
 # =====================
-# ⭐ 取得全部 Enrichr Library
+# 取得全部 Enrichr Library
 # =====================
 @st.cache_data
 def load_enrichr_libraries():
@@ -106,7 +106,7 @@ st.download_button(
 )
 
 # =====================
-# ⭐ 多 Library 選擇
+# 多 Library 選擇
 # =====================
 selected_libraries = st.multiselect(
     "選擇分析庫（可多選）",
@@ -116,7 +116,7 @@ selected_libraries = st.multiselect(
 st.markdown("💡 多選方式：點選下拉選單中的項目，列表中會累加，點叉號可取消")
 
 # =====================
-# ⭐ 前50基因預覽
+# 前50基因預覽
 # =====================
 genes_preview = (
     result["Symbol"]
@@ -132,16 +132,9 @@ if len(genes_preview) > 0:
     st.text_area("Gene List Preview", "\n".join(genes_preview), height=200)
 
 # =====================
-# ⭐ 顯示 description 提醒
+# 一鍵打開 Enrichr-KG（自動填 description）
 # =====================
-if gene:
-    st.subheader("Description（顯示提醒）")
-    st.info(f"Description 將使用輸入的 Gene Symbol: **{gene}**")
-
-# =====================
-# ⭐ 一鍵打開 Enrichr-KG
-# =====================
-if st.button("👉 一鍵打開 Enrichr-KG"):
+if st.button("🚀 一鍵打開 Enrichr-KG"):
 
     if len(genes_preview) == 0:
         st.warning("篩選後沒有基因")
@@ -152,7 +145,7 @@ if st.button("👉 一鍵打開 Enrichr-KG"):
         st.stop()
 
     # ---------------------
-    # 1️⃣ POST gene list 到 Enrichr
+    # 1️⃣ POST gene list 到 Enrichr（包含 description）
     # ---------------------
     payload = {
         "list": "\n".join(genes_preview),
@@ -160,7 +153,11 @@ if st.button("👉 一鍵打開 Enrichr-KG"):
     }
 
     try:
-        r = requests.post("https://maayanlab.cloud/Enrichr/addList", files=payload, timeout=10)
+        r = requests.post(
+            "https://maayanlab.cloud/Enrichr/addList",
+            files=payload,
+            timeout=10
+        )
         r.raise_for_status()
         uid = r.json().get("userListId")
         if not uid:
@@ -171,7 +168,7 @@ if st.button("👉 一鍵打開 Enrichr-KG"):
         st.stop()
 
     # ---------------------
-    # 2️⃣ 生成 Enrichr-KG URL
+    # 2️⃣ 生成 Enrichr-KG URL（自動填左側基因 + description）
     # ---------------------
     libraries_json = [{"name": lib, "limit": 5} for lib in selected_libraries]
     q_json = {
@@ -189,9 +186,13 @@ if st.button("👉 一鍵打開 Enrichr-KG"):
     # 3️⃣ 顯示連結
     # ---------------------
     st.markdown(
-        f'<a href="{kg_url}" target="_blank">🚀 點此打開 Enrichr-KG（前50基因 + 多library）</a>',
+        f'<a href="{kg_url}" target="_blank">🔗 點此打開 Enrichr-KG（前50基因 + description + 多library）</a>',
         unsafe_allow_html=True
     )
+
+    # ✅ 顯示 description 提示
+    st.info(f"Description 已自動填入使用者輸入的 Gene Symbol: **{gene}**")
+
 
 
 
@@ -208,6 +209,7 @@ st.markdown(
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
 
 )
+
 
 
 
