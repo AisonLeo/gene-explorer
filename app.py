@@ -38,7 +38,8 @@ def load_enrichr_libraries():
     r = requests.get(url)
     r.raise_for_status()
     data = r.json()
-    return sorted([lib["libraryName"] for lib in data["statistics"]])
+    libraries = sorted([lib["libraryName"] for lib in data["statistics"]])
+    return libraries
 
 library_list = load_enrichr_libraries()
 
@@ -106,25 +107,21 @@ st.download_button(
 )
 
 # =====================
-# ⭐ 多 Library 選擇
+# Library 多選
 # =====================
 selected_libraries = st.multiselect(
     "選擇分析庫（可多選）",
     library_list,
     default=["KEGG_2021_Human"]
 )
-
 st.markdown("💡 多選方式：點選下拉選單中的項目，列表中會累加，點叉號可取消")
 
 # =====================
-# ⭐ 建立 Enrichr-KG URL
+# ⭐ 建立 Enrichr-KG URL（支援多 library）
 # =====================
 def build_enrichr_kg_url(genes, description, libraries):
-
     gene_text = "\n".join(genes)
-
     lib_json = [{"name": lib, "limit": 5} for lib in libraries]
-
     q_json = {
         "gene_list": gene_text,
         "description": description,
@@ -134,7 +131,6 @@ def build_enrichr_kg_url(genes, description, libraries):
         "gene_degree": 3,
         "search": True
     }
-
     encoded = urllib.parse.quote(json.dumps(q_json))
     return f"https://maayanlab.cloud/enrichr-kg?q={encoded}"
 
@@ -142,8 +138,6 @@ def build_enrichr_kg_url(genes, description, libraries):
 # ⭐ 一鍵打開 Enrichr-KG
 # =====================
 if st.button("👉 一鍵打開 Enrichr-KG"):
-
-    # 前50筆基因
     genes = (
         result["Symbol"]
         .dropna()
@@ -162,7 +156,7 @@ if st.button("👉 一鍵打開 Enrichr-KG"):
     else:
         kg_url = build_enrichr_kg_url(
             genes,
-            gene,   # Description 使用者輸入的 gene symbol
+            gene,   # description = 使用者輸入
             selected_libraries
         )
 
@@ -171,35 +165,11 @@ if st.button("👉 一鍵打開 Enrichr-KG"):
             unsafe_allow_html=True
         )
 
-
-
-
-
-
 # =====================
 # KMplot 連結
 # =====================
 st.divider()
-
 st.markdown(
     "[👉 點此進入 KMplot（Breast Cancer prognosis）]"
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
-
 )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
