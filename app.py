@@ -20,7 +20,7 @@ st.set_page_config(
 DATA_PATH = Path("data/578T_Tax660_vs_578T_Parental.xlsx")
 
 # =====================
-# 讀取基因資料
+# 讀取資料
 # =====================
 @st.cache_data
 def load_data():
@@ -30,19 +30,15 @@ def load_data():
 df = load_data()
 
 # =====================
-# ⭐ 取得全部 Enrichr Library
+# ⭐ 取得全部 Library
 # =====================
 @st.cache_data
 def load_enrichr_libraries():
-
     url = "https://maayanlab.cloud/Enrichr/datasetStatistics"
     r = requests.get(url)
     r.raise_for_status()
-
     data = r.json()
-    libraries = sorted([lib["libraryName"] for lib in data["statistics"]])
-
-    return libraries
+    return sorted([lib["libraryName"] for lib in data["statistics"]])
 
 library_list = load_enrichr_libraries()
 
@@ -84,7 +80,6 @@ direction = st.radio(
     ["Up-regulated", "Down-regulated"]
 )
 
-# 篩選
 if direction == "Up-regulated":
     result = df[df["log2FoldChange"] >= fc_threshold]
 else:
@@ -110,24 +105,27 @@ st.download_button(
 )
 
 # =====================
-# Library 選單（全部）
+# ⭐ 多 Library 選擇
 # =====================
-selected_library = st.selectbox(
-    "選擇分析庫",
-    library_list
+selected_libraries = st.multiselect(
+    "選擇分析庫（可多選）",
+    library_list,
+    default=["KEGG_2021_Human"]
 )
 
 # =====================
-# ⭐ 建立 Enrichr-KG URL
+# ⭐ 建立 KG URL
 # =====================
-def build_enrichr_kg_url(genes, description, library):
+def build_enrichr_kg_url(genes, description, libraries):
 
     gene_text = "\n".join(genes)
+
+    lib_json = [{"name": lib, "limit": 5} for lib in libraries]
 
     q_json = {
         "gene_list": gene_text,
         "description": description,
-        "libraries": [{"name": library, "limit": 5}],
+        "libraries": lib_json,
         "term_limit": 5,
         "min_lib": 1,
         "gene_degree": 3,
@@ -139,7 +137,7 @@ def build_enrichr_kg_url(genes, description, library):
     return f"https://maayanlab.cloud/enrichr-kg?q={encoded}"
 
 # =====================
-# ⭐ 一鍵打開 Enrichr-KG
+# 一鍵開啟
 # =====================
 if st.button("👉 一鍵打開 Enrichr-KG"):
 
@@ -154,18 +152,22 @@ if st.button("👉 一鍵打開 Enrichr-KG"):
 
     if len(genes) == 0:
         st.warning("篩選後沒有基因")
-    else:
 
+    elif len(selected_libraries) == 0:
+        st.warning("請至少選一個 library")
+
+    else:
         kg_url = build_enrichr_kg_url(
             genes,
-            gene,   # Description = 使用者輸入
-            selected_library
+            gene,
+            selected_libraries
         )
 
         st.markdown(
             f'<a href="{kg_url}" target="_blank">🚀 點此打開 Enrichr-KG</a>',
             unsafe_allow_html=True
         )
+
 
 
 
@@ -180,6 +182,7 @@ st.markdown(
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
 
 )
+
 
 
 
