@@ -1,7 +1,6 @@
 from io import BytesIO
 from pathlib import Path
 import re
-import base64
 
 import streamlit as st
 import pandas as pd
@@ -173,7 +172,7 @@ if st.button("送出到 Enrichr-KG"):
         try:
             r = requests.post(
                 "https://maayanlab.cloud/Enrichr/addList",
-                files=payload,  # ⚠️ 官方建議用 files
+                files=payload,  # 官方建議使用 files
                 timeout=10
             )
             r.raise_for_status()
@@ -181,28 +180,10 @@ if st.button("送出到 Enrichr-KG"):
             uid = res.get("userListId")
 
             if uid:
-                # 自動生成 HTML 來 POST 到 Enrichr-KG
-                html_content = f"""
-                <html>
-                <body onload="document.forms[0].submit();">
-                  <form method="POST" action="https://maayanlab.cloud/enrichr-kg/enrich?userListId={uid}&backgroundType={selected_library}">
-                    <input type="hidden" name="description" value="{desc}">
-                    <input type="hidden" name="genes" value="{','.join(genes)}">
-                  </form>
-                  <p>正在開啟 Enrichr-KG，請稍候...</p>
-                </body>
-                </html>
-                """
-
-                # 將 HTML 轉 Base64，生成可以點擊的連結
-                b64 = base64.b64encode(html_content.encode()).decode()
-                href = f'data:text/html;base64,{b64}'
-
-                st.markdown(
-                    f'<a href="{href}" target="_blank">👉 點此打開 Enrichr-KG（自動填基因與 Description）</a>',
-                    unsafe_allow_html=True
-                )
+                enrichr_url = f"https://maayanlab.cloud/enrichr-kg/enrich?userListId={uid}&backgroundType={selected_library}"
                 st.success(f"已準備好 Enrichr-KG ({selected_library_name})")
+                st.markdown(f"[👉 點此打開 Enrichr-KG (Gene List 已填)]({enrichr_url})", unsafe_allow_html=True)
+                st.info(f"Description: {desc} （請在 Enrichr-KG 前端手動填入）")
 
             else:
                 st.error("Enrichr 回傳沒有 userListId，無法產生連結")
@@ -229,6 +210,7 @@ st.markdown(
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
 
 )
+
 
 
 
