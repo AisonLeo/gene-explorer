@@ -3,8 +3,8 @@ from pathlib import Path
 import streamlit as st
 import pandas as pd
 import json
-import urllib.parse
 import requests
+import urllib.parse
 
 # =====================
 # Streamlit 設定
@@ -38,8 +38,7 @@ def load_enrichr_libraries():
     r = requests.get(url)
     r.raise_for_status()
     data = r.json()
-    libraries = sorted([lib["libraryName"] for lib in data["statistics"]])
-    return libraries
+    return sorted([lib["libraryName"] for lib in data["statistics"]])
 
 library_list = load_enrichr_libraries()
 
@@ -107,7 +106,7 @@ st.download_button(
 )
 
 # =====================
-# Library 多選
+# ⭐ 多 Library 選擇
 # =====================
 selected_libraries = st.multiselect(
     "選擇分析庫（可多選）",
@@ -117,53 +116,76 @@ selected_libraries = st.multiselect(
 st.markdown("💡 多選方式：點選下拉選單中的項目，列表中會累加，點叉號可取消")
 
 # =====================
-# ⭐ 建立 Enrichr-KG URL（支援多 library）
+# ⭐ 前50基因預覽
 # =====================
-def build_enrichr_kg_url(genes, description, libraries):
-    gene_text = "\n".join(genes)
-    lib_json = [{"name": lib, "limit": 5} for lib in libraries]
-    q_json = {
-        "gene_list": gene_text,
-        "description": description,
-        "libraries": lib_json,
-        "term_limit": 5,
-        "min_lib": 1,
-        "gene_degree": 3,
-        "search": True
-    }
-    encoded = urllib.parse.quote(json.dumps(q_json))
-    return f"https://maayanlab.cloud/enrichr-kg?q={encoded}"
+genes_preview = (
+    result["Symbol"]
+    .dropna()
+    .astype(str)
+    .str.strip()
+    .str.upper()
+    .unique()
+)[:50]
+
+if len(genes_preview) > 0:
+    st.subheader("前50筆基因預覽（送到 Enrichr-KG）")
+    st.text_area("Gene List Preview", "\n".join(genes_preview), height=200)
 
 # =====================
 # ⭐ 一鍵打開 Enrichr-KG
 # =====================
 if st.button("👉 一鍵打開 Enrichr-KG"):
-    genes = (
-        result["Symbol"]
-        .dropna()
-        .astype(str)
-        .str.strip()
-        .str.upper()
-        .unique()
-    )[:50]
 
-    if len(genes) == 0:
+    if len(genes_preview) == 0:
         st.warning("篩選後沒有基因")
+        st.stop()
 
-    elif len(selected_libraries) == 0:
+    if len(selected_libraries) == 0:
         st.warning("請至少選一個 library")
+        st.stop()
 
-    else:
-        kg_url = build_enrichr_kg_url(
-            genes,
-            gene,   # description = 使用者輸入
-            selected_libraries
-        )
+    # ---------------------
+    # 1️⃣ 先 POST gene list 到 Enrichr
+    # ---------------------
+    payload = {
+        "list": "\n".join(genes_preview),
+        "description": gene
+    }
 
-        st.markdown(
-            f'<a href="{kg_url}" target="_blank">🚀 點此打開 Enrichr-KG</a>',
-            unsafe_allow_html=True
-        )
+    try:
+        r = requests.post("https://maayanlab.cloud/Enrichr/addList", files=payload, timeout=10)
+        r.raise_for_status()
+        uid = r.json().get("userListId")
+        if not uid:
+            st.error("Enrichr 回傳沒有 userListId，無法生成 URL")
+            st.stop()
+    except Exception as e:
+        st.error(f"傳送 Enrichr 發生錯誤：{e}")
+        st.stop()
+
+    # ---------------------
+    # 2️⃣ 生成 Enrichr-KG URL
+    # ---------------------
+    libraries_json = [{"name": lib, "limit": 5} for lib in selected_libraries]
+    q_json = {
+        "userListId": str(uid),
+        "libraries": libraries_json,
+        "term_limit": 5,
+        "min_lib": 1,
+        "gene_degree": 3,
+        "search": True
+    }
+
+    kg_url = f"https://maayanlab.cloud/enrichr-kg?q={urllib.parse.quote(json.dumps(q_json))}"
+
+    # ---------------------
+    # 3️⃣ 顯示連結
+    # ---------------------
+    st.markdown(
+        f'<a href="{kg_url}" target="_blank">🚀 點此打開 Enrichr-KG（前50基因 + description + 多library）</a>',
+        unsafe_allow_html=True
+    )
+
 
 # =====================
 # KMplot 連結
@@ -173,3 +195,4 @@ st.markdown(
     "[👉 點此進入 KMplot（Breast Cancer prognosis）]"
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
 )
+
