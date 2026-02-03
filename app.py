@@ -8,12 +8,12 @@ import requests
 # Streamlit 頁面設定
 # =====================
 st.set_page_config(
-    page_title="Gene Explorer",
+    page_title="Gene Explorer - Enrichr-KG",
     layout="wide"
 )
 
 # =====================
-# 資料路徑設定（部署關鍵）
+# 資料路徑
 # =====================
 DATA_PATH = Path("data/578T_Tax660_vs_578T_Parental.xlsx")
 
@@ -25,7 +25,6 @@ def load_data():
     if not DATA_PATH.exists():
         st.error(f"找不到資料檔案：{DATA_PATH}")
         st.stop()
-
     df = pd.read_excel(DATA_PATH)
     return df[["Symbol", "log2FoldChange", "padj"]].dropna()
 
@@ -69,9 +68,7 @@ direction = st.radio(
     ["Up-regulated", "Down-regulated"]
 )
 
-# =====================
 # 篩選邏輯
-# =====================
 if direction == "Up-regulated":
     result = df[df["log2FoldChange"] >= fc_threshold]
 else:
@@ -80,12 +77,11 @@ else:
 if use_padj:
     result = result[result["padj"] < 0.05]
 
+# 顯示結果
 st.write(f"符合條件的 gene 數量：{len(result)}")
 st.dataframe(result, use_container_width=True)
 
-# =====================
 # 下載 Excel
-# =====================
 buffer = BytesIO()
 result.to_excel(buffer, index=False, engine="openpyxl")
 buffer.seek(0)
@@ -98,13 +94,24 @@ st.download_button(
 )
 
 # =====================
-# Enrichr 分析（乾淨版，不跳轉，不選 library）
+# Enrichr-KG 分析
 # =====================
-st.subheader("送到 Enrichr（GO / Pathway）分析")
+st.subheader("送到 Enrichr-KG 分析")
 
-if st.button("送出到 Enrichr"):
+# Library 選單
+library_options = {
+    "KEGG": "KEGG_2021_Human",
+    "GO Biological Process": "GO_Biological_Process_2021",
+    "GO Molecular Function": "GO_Molecular_Function_2021",
+    "GO Cellular Component": "GO_Cellular_Component_2021",
+    "Reactome": "Reactome_2022"
+}
+selected_library_name = st.selectbox("選擇分析庫", options=list(library_options.keys()))
+selected_library = library_options[selected_library_name]
 
-    # 取 gene list，清理格式
+if st.button("送出到 Enrichr-KG"):
+
+    # 取前50個 Gene 並清理格式
     genes = (
         result["Symbol"]
         .dropna()
@@ -113,18 +120,17 @@ if st.button("送出到 Enrichr"):
         .str.upper()
         .unique()
     )
-    # 過濾非字母數字並只取前50個
     genes = [g for g in genes if g.isalnum()]
     genes = genes[:50]
 
     if len(genes) == 0:
         st.warning("篩選後沒有基因可送出")
     else:
-        # 立即顯示 Gene list
+        # 左側框顯示
         st.subheader("送出的 Gene List（前 50 個）")
-        st.markdown("```\n" + "\n".join(genes) + "\n```")
+        st.text_area("Gene List (左側框)", "\n".join(genes), height=200)
 
-        # 上傳到 Enrichr
+        # 上傳到 Enrichr-KG
         genes_str = "\n".join(genes)
         payload = {
             "list": (None, genes_str),
@@ -143,11 +149,11 @@ if st.button("送出到 Enrichr"):
             else:
                 uid = r.json().get("userListId")
                 if uid:
-                    # 產生 Enrichr 連結
-                    enrichr_url = f"https://maayanlab.cloud/Enrichr/enrich?userListId={uid}"
-                    st.success("已送出到 Enrichr")
+                    enrichr_url = f"https://maayanlab.cloud/Enrichr-KG/enrich?userListId={uid}&backgroundType={selected_library}"
+                    st.success(f"已送出到 Enrichr-KG ({selected_library_name})")
+
                     # 顯示連結給使用者點擊
-                    st.markdown(f"[👉 點此查看 Enrichr 結果]({enrichr_url})", unsafe_allow_html=True)
+                    st.markdown(f"[👉 點此查看 Enrichr-KG 結果]({enrichr_url})", unsafe_allow_html=True)
                 else:
                     st.error("Enrichr 回傳沒有 userListId，無法產生連結")
 
@@ -168,6 +174,7 @@ st.markdown(
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
 
 )
+
 
 
 
