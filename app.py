@@ -133,6 +133,13 @@ if len(genes_preview) > 0:
     st.text_area("Gene List Preview", "\n".join(genes_preview), height=200)
 
 # =====================
+# ⭐ 顯示 description 提醒
+# =====================
+if gene:
+    st.subheader("Description（顯示提醒，KG前端不支援自動填）")
+    st.info(f"Description 將使用輸入的 Gene Symbol: **{gene}**")
+
+# =====================
 # ⭐ 一鍵打開 Enrichr-KG
 # =====================
 if st.button("👉 一鍵打開 Enrichr-KG"):
@@ -183,7 +190,7 @@ if st.button("👉 一鍵打開 Enrichr-KG"):
     # 3️⃣ 顯示連結
     # ---------------------
     st.markdown(
-        f'<a href="{kg_url}" target="_blank">🚀 點此打開 Enrichr-KG（前50基因 + description + 多library）</a>',
+        f'<a href="{kg_url}" target="_blank">🚀 點此打開 Enrichr-KG（前50基因 + 多library）</a>',
         unsafe_allow_html=True
     )
 
@@ -201,6 +208,7 @@ st.markdown(
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
 
 )
+
 
 
 
