@@ -98,7 +98,7 @@ st.download_button(
 )
 
 # =====================
-# Enrichr 分析
+# Enrichr 分析（漂亮輸出版 + 按鈕）
 # =====================
 if st.button("送到 Enrichr（GO / Pathway）"):
 
@@ -122,7 +122,12 @@ if st.button("送到 Enrichr（GO / Pathway）"):
     if len(genes) == 0:
         st.warning("篩選後沒有基因可送出")
     else:
-        st.write("送出的 genes：", genes)  # debug 輸出，方便檢查
+        # =====================
+        # 乾淨顯示送出的 genes
+        # =====================
+        st.subheader("送出的 Gene List（前 50 個）")
+        st.markdown("```\n" + "\n".join(genes) + "\n```")
+
         genes_str = "\n".join(genes)
 
         # 使用官方建議的 files 格式
@@ -138,23 +143,28 @@ if st.button("送到 Enrichr（GO / Pathway）"):
                 timeout=10  # 避免 Cloud 過久無回應
             )
 
-            # debug response
+            # 顯示 HTTP status
             st.write("HTTP status:", r.status_code)
-            st.write("response text:", r.text)
 
             if not r.ok:
                 st.error(f"Enrichr 傳送失敗：HTTP {r.status_code}")
             else:
                 uid = r.json().get("userListId")
                 if uid:
-                    url = f"https://maayanlab.cloud/Enrichr/enrich?userListId={uid}"
+                    enrichr_url = f"https://maayanlab.cloud/Enrichr/enrich?userListId={uid}"
                     st.success("已送出到 Enrichr")
-                    st.markdown(f"[👉 點此查看 Enrichr 結果]({url})")
+                    # =====================
+                    # 使用按鈕直接打開
+                    # =====================
+                    if st.button("👉 打開 Enrichr 網頁"):
+                        st.experimental_set_query_params()  # 清除 Streamlit URL 錯誤提示
+                        st.write(f"[點此查看 Enrichr 結果]({enrichr_url})")
                 else:
                     st.error("Enrichr 回傳沒有 userListId，無法產生連結")
 
         except Exception as e:
             st.error(f"傳送 Enrichr 發生錯誤：{e}")
+
 
 # =====================
 # KMplot 連結
@@ -166,4 +176,5 @@ st.markdown(
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
 
 )
+
 
