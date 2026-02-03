@@ -102,33 +102,59 @@ st.download_button(
 # =====================
 if st.button("送到 Enrichr（GO / Pathway）"):
 
+    # 取 gene list，清理格式
     genes = (
         result["Symbol"]
+        .dropna()
         .astype(str)
-        .str.strip()
+        .str.strip()        # 去掉空白
+        .str.upper()        # 轉大寫
         .unique()
-    )[:50]
+    )
 
+    # 過濾非字母數字（避免奇怪符號）
+    genes = [g for g in genes if g.isalnum()]
+
+    # 只取前 50 個基因
+    genes = genes[:50]
+
+    # 檢查是否有 gene
     if len(genes) == 0:
-        st.warning("篩選後沒有基因")
+        st.warning("篩選後沒有基因可送出")
     else:
+        st.write("送出的 genes：", genes)  # debug 輸出，方便檢查
+        genes_str = "\n".join(genes)
+
+        # 使用官方建議的 files 格式
         payload = {
-            "list": "\n".join(genes),
-            "description": "Streamlit gene list"
+            "list": (None, genes_str),
+            "description": (None, "Streamlit gene list")
         }
 
-        r = requests.post(
-            "https://maayanlab.cloud/Enrichr/addList",
-            files=payload
-        )
+        try:
+            r = requests.post(
+                "https://maayanlab.cloud/Enrichr/addList",
+                files=payload,
+                timeout=10  # 避免 Cloud 過久無回應
+            )
 
-        if r.status_code == 200:
-            uid = r.json()["userListId"]
-            url = f"https://maayanlab.cloud/Enrichr/enrich?userListId={uid}"
-            st.success("已送出到 Enrichr")
-            st.markdown(f"[👉 點此查看 Enrichr 結果]({url})")
-        else:
-            st.error("Enrichr 傳送失敗")
+            # debug response
+            st.write("HTTP status:", r.status_code)
+            st.write("response text:", r.text)
+
+            if not r.ok:
+                st.error(f"Enrichr 傳送失敗：HTTP {r.status_code}")
+            else:
+                uid = r.json().get("userListId")
+                if uid:
+                    url = f"https://maayanlab.cloud/Enrichr/enrich?userListId={uid}"
+                    st.success("已送出到 Enrichr")
+                    st.markdown(f"[👉 點此查看 Enrichr 結果]({url})")
+                else:
+                    st.error("Enrichr 回傳沒有 userListId，無法產生連結")
+
+        except Exception as e:
+            st.error(f"傳送 Enrichr 發生錯誤：{e}")
 
 # =====================
 # KMplot 連結
@@ -140,3 +166,4 @@ st.markdown(
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
 
 )
+
