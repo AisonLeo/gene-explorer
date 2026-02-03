@@ -1,11 +1,11 @@
 from io import BytesIO
 from pathlib import Path
 import re
+import base64
 
 import streamlit as st
 import pandas as pd
 import requests
-import base64
 
 # =====================
 # Streamlit 頁面設定
@@ -161,19 +161,19 @@ if st.button("送出到 Enrichr-KG"):
         st.subheader("送出的 Gene List（前 50 個）")
         st.text_area("Gene List (Preview)", "\n".join(genes), height=200)
 
-        desc = st.text_input("Description（將自動填入）", value=gene.upper())
+        desc = st.text_input("Description（自動填入）", value=gene.upper())
 
         # 上傳到 Enrichr 得到 userListId
         genes_str = "\n".join(genes)
         payload = {
-            "list": genes_str,
-            "description": desc
+            "list": (None, genes_str),
+            "description": (None, desc)
         }
 
         try:
             r = requests.post(
                 "https://maayanlab.cloud/Enrichr/addList",
-                files=payload,
+                files=payload,  # ⚠️ 官方建議用 files
                 timeout=10
             )
             r.raise_for_status()
@@ -209,6 +209,11 @@ if st.button("送出到 Enrichr-KG"):
 
         except Exception as e:
             st.error(f"傳送到 Enrichr 發生錯誤：{e}")
+            if hasattr(r, "status_code"):
+                st.text(f"Status code: {r.status_code}")
+            if hasattr(r, "text"):
+                st.text(f"Response text: {r.text}")
+
 
 
 
@@ -224,6 +229,7 @@ st.markdown(
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
 
 )
+
 
 
 
