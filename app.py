@@ -50,7 +50,7 @@ st.title("log2FoldChange Gene Explorer")
 # =====================
 # Gene 查詢
 # =====================
-gene = st.text_input("請輸入 Gene Symbol（會當作 Description）")
+gene = st.text_input("請輸入 Gene Symbol")
 
 if gene:
     if gene in df["Symbol"].values:
@@ -212,5 +212,6 @@ st.markdown(
     "[👉 點此進入 KMplot（Breast Cancer prognosis）]"
     "(https://kmplot.com/analysis/index.php?p=service&cancer=breast)"
 )
+
 
 
